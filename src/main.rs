@@ -9,17 +9,28 @@ struct Donut<const H: usize, const W: usize> {
     r2: f64,
     k1: f64,
     k2: f64,
+    pub frame: [[char; W]; H],
+    z_buf: [[f64; W]; H],
 }
 
 impl<const H: usize, const W: usize> Donut<H, W> {
     pub fn new(r1: f64, r2: f64, k2: f64) -> Self {
         let k1 = W as f64 * k2 * 3. / (8. * (r1 + r2));
-        Self { r1, r2, k1, k2 }
+        let frame: [[char; W]; H] = [[' '; W]; H];
+        let z_buf: [[f64; W]; H] = [[0.; W]; H];
+        Self {
+            r1,
+            r2,
+            k1,
+            k2,
+            frame,
+            z_buf,
+        }
     }
 
-    pub fn render(&self, a: f64, b: f64) -> [[char; W]; H] {
-        let mut frame: [[char; W]; H] = [[' '; W]; H];
-        let mut z_buffer: [[f64; W]; H] = [[0.; W]; H];
+    pub fn render(&mut self, a: f64, b: f64) {
+        self.frame = [[' '; W]; H];
+        self.z_buf = [[0.; W]; H];
         let (sin_a, cos_a) = a.sin_cos();
         let (sin_b, cos_b) = b.sin_cos();
         for theta in 0..314 {
@@ -42,13 +53,16 @@ impl<const H: usize, const W: usize> Donut<H, W> {
                 let luminance =
                     cos_phi * cos_theta * sin_b - cos_a * cos_theta * sin_phi - sin_a * sin_theta
                         + cos_b * (cos_a * sin_theta - cos_theta * sin_a * sin_phi);
-                if luminance > 0. && 1. / z > z_buffer[x_projection][y_projection] {
-                    z_buffer[x_projection][y_projection] = 1. / z;
-                    frame[x_projection][y_projection] = CHARS[(luminance * 8.) as usize];
+                if x_projection < W
+                    && y_projection < H
+                    && luminance > 0.
+                    && 1. / z > self.z_buf[y_projection][x_projection]
+                {
+                    self.z_buf[y_projection][x_projection] = 1. / z;
+                    self.frame[y_projection][x_projection] = CHARS[(luminance * 8.) as usize];
                 }
             }
         }
-        frame
     }
 }
 
@@ -62,17 +76,17 @@ fn main() {
     })
     .expect("Error setting Ctrl-C handler");
 
-    let donut: Donut<HEIGHT, WIDTH> = Donut::new(1., 2., 5.);
+    let mut donut: Donut<HEIGHT, WIDTH> = Donut::new(1., 2., 5.);
     let (mut a, mut b) = (1., 1.);
 
     loop {
         print!("\x1b[H");
-        let frame = donut.render(a, b);
+        donut.render(a, b);
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
-                print!("{}", frame[x][y]);
+                print!("{}", donut.frame[y][x]);
             }
-            println!("");
+            println!();
         }
         a += 0.07;
         b += 0.03;
